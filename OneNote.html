@@ -5,20 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OneNote-like Interface</title>
     <style>
+        /* Reset default margins and set full height */
         body, html {
             margin: 0;
             padding: 0;
             height: 100%;
-            overflow: hidden;
+            overflow: auto; /* Enable scrollbars when content overflows */
         }
+        /* Infinite canvas styles */
         #infinite-canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 10000px;
-            height: 10000px;
+            position: relative;
+            min-width: 100%;
+            min-height: 100%;
             background: #f0f0f0;
+            padding: 20px;
+            box-sizing: border-box;
         }
+        /* Text box container styles */
         .text-box {
             position: absolute;
             background: rgba(255, 255, 255, 0.8);
@@ -26,8 +29,9 @@
             padding: 5px;
             min-width: 100px;
             min-height: 30px;
-            cursor: move;
+            cursor: move; /* Indicate draggable */
         }
+        /* Text input area styles */
         .text-input {
             width: 100%;
             height: 100%;
@@ -40,6 +44,7 @@
             overflow: auto;
             cursor: text;
         }
+        /* Resize handle styles */
         .resize-handle {
             position: absolute;
             width: 10px;
@@ -47,35 +52,37 @@
             background: #666;
             right: 0;
             bottom: 0;
-            cursor: nwse-resize;
+            cursor: nwse-resize; /* Indicate resizable */
         }
+        /* Image container styles */
         .image-container {
             position: absolute;
-            cursor: move;
-        }
-        .image-container img {
+            cursor: move; /* Indicate draggable */
             max-width: 300px;
             max-height: 300px;
+        }
+        .image-container img {
+            width: 100%;
+            height: 100%;
         }
     </style>
 </head>
 <body>
+    <!-- Main canvas container -->
     <div id="infinite-canvas"></div>
 
     <script>
         const canvas = document.getElementById('infinite-canvas');
-        let isDragging = false;
         let isResizing = false;
-        let startX, startY, scrollLeft, scrollTop;
 
-        // Handle click events to create text boxes
+        // Create a new text box upon clicking on the canvas
         canvas.addEventListener('click', (e) => {
             if (e.target === canvas) {
                 createTextBox(e.pageX, e.pageY);
             }
         });
 
-        // Create a new text box at the specified position
+        // Function to create a new text box at (x, y) coordinates
         function createTextBox(x, y) {
             const box = document.createElement('div');
             box.className = 'text-box';
@@ -95,82 +102,68 @@
 
             makeBoxDraggable(box);
             makeBoxResizable(box, resizeHandle);
+            expandCanvas();
         }
 
         // Make text boxes draggable
-        function makeBoxDraggable(element) {
-            let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
-            element.onmousedown = dragMouseDown;
+        function makeBoxDraggable(box) {
+            let offsetX, offsetY, initX, initY;
 
-            function dragMouseDown(e) {
-                if (e.target.classList.contains('text-input') || isResizing) return;
-                e.preventDefault();
-                pos3 = e.clientX;
-                pos4 = e.clientY;
-                document.onmouseup = closeDragElement;
-                document.onmousemove = elementDrag;
-            }
-
-            function elementDrag(e) {
-                e.preventDefault();
-                pos1 = pos3 - e.clientX;
-                pos2 = pos4 - e.clientY;
-                pos3 = e.clientX;
-                pos4 = e.clientY;
-                element.style.top = `${element.offsetTop - pos2}px`;
-                element.style.left = `${element.offsetLeft - pos1}px`;
-            }
-
-            function closeDragElement() {
-                document.onmouseup = null;
-                document.onmousemove = null;
-            }
+            box.addEventListener('mousedown', (e) => {
+                if (e.target.className.includes('resize-handle') || e.target.className.includes('text-input')) return;
+                offsetX = e.clientX - box.offsetLeft;
+                offsetY = e.clientY - box.offsetTop;
+                document.onmousemove = (e) => {
+                    box.style.left = `${e.clientX - offsetX}px`;
+                    box.style.top = `${e.clientY - offsetY}px`;
+                    expandCanvas();
+                };
+                document.onmouseup = () => document.onmousemove = document.onmouseup = null;
+            });
         }
 
         // Make text boxes resizable
         function makeBoxResizable(box, handle) {
-            handle.addEventListener('mousedown', initResize, false);
-
-            function initResize(e) {
+            handle.addEventListener('mousedown', (e) => {
                 isResizing = true;
-                window.addEventListener('mousemove', resize, false);
-                window.addEventListener('mouseup', stopResize, false);
-            }
+                const initX = e.clientX;
+                const initY = e.clientY;
+                const initWidth = box.offsetWidth;
+                const initHeight = box.offsetHeight;
 
-            function resize(e) {
-                box.style.width = (e.clientX - box.offsetLeft) + 'px';
-                box.style.height = (e.clientY - box.offsetTop) + 'px';
-            }
-
-            function stopResize(e) {
-                isResizing = false;
-                window.removeEventListener('mousemove', resize, false);
-                window.removeEventListener('mouseup', stopResize, false);
-            }
+                document.onmousemove = (e) => {
+                    box.style.width = `${initWidth + e.clientX - initX}px`;
+                    box.style.height = `${initHeight + e.clientY - initY}px`;
+                    expandCanvas();
+                };
+                document.onmouseup = () => {
+                    isResizing = false;
+                    document.onmousemove = document.onmouseup = null;
+                };
+            });
         }
 
-        // Handle pasting images
+        // Handle image pasting and drop
         document.addEventListener('paste', (e) => {
             const items = e.clipboardData.items;
-            for (let i = 0; i < items.length; i++) {
-                if (items[i].type.indexOf('image') !== -1) {
-                    const blob = items[i].getAsFile();
+            for (let item of items) {
+                if (item.type.indexOf('image') !== -1) {
+                    const blob = item.getAsFile();
                     const reader = new FileReader();
-                    reader.onload = (event) => {
-                        createImage(event.target.result);
-                    };
+                    reader.onload = (e) => createImage(e.target.result);
                     reader.readAsDataURL(blob);
                 }
             }
         });
 
-        // Create a new image at the center of the viewport
+        // Create and position a new image
         function createImage(src) {
             const container = document.createElement('div');
             container.className = 'image-container';
             const img = document.createElement('img');
             img.src = src;
             container.appendChild(img);
+
             canvas.appendChild(container);
 
             const rect = canvas.getBoundingClientRect();
@@ -178,65 +171,53 @@
             container.style.top = `${window.pageYOffset + rect.height / 2}px`;
 
             makeImageDraggable(container);
+            expandCanvas();
         }
 
         // Make images draggable
-        function makeImageDraggable(element) {
-            let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
-            element.onmousedown = dragMouseDown;
+        function makeImageDraggable(container) {
+            let offsetX, offsetY;
 
-            function dragMouseDown(e) {
-                e.preventDefault();
-                pos3 = e.clientX;
-                pos4 = e.clientY;
-                document.onmouseup = closeDragElement;
-                document.onmousemove = elementDrag;
-            }
-
-            function elementDrag(e) {
-                e.preventDefault();
-                pos1 = pos3 - e.clientX;
-                pos2 = pos4 - e.clientY;
-                pos3 = e.clientX;
-                pos4 = e.clientY;
-                element.style.top = `${element.offsetTop - pos2}px`;
-                element.style.left = `${element.offsetLeft - pos1}px`;
-            }
-
-            function closeDragElement() {
-                document.onmouseup = null;
-                document.onmousemove = null;
-            }
+            container.addEventListener('mousedown', (e) => {
+                offsetX = e.clientX - container.offsetLeft;
+                offsetY = e.clientY - container.offsetTop;
+                document.onmousemove = (e) => {
+                    container.style.left = `${e.clientX - offsetX}px`;
+                    container.style.top = `${e.clientY - offsetY}px`;
+                    expandCanvas();
+                };
+                document.onmouseup = () => document.onmousemove = document.onmouseup = null;
+            });
         }
 
-        // Implement dragging for infinite scrolling
-        canvas.addEventListener('mousedown', (e) => {
-            if (e.target === canvas) {
-                isDragging = true;
-                startX = e.pageX - canvas.offsetLeft;
-                startY = e.pageY - canvas.offsetTop;
-                scrollLeft = window.pageXOffset;
-                scrollTop = window.pageYOffset;
+        // Function to expand canvas size to fit contents
+        function expandCanvas() {
+            const elements = canvas.children;
+            let maxRight = 0;
+            let maxBottom = 0;
+
+            for (let element of elements) {
+                const rect = element.getBoundingClientRect();
+                maxRight = Math.max(maxRight, rect.right);
+                maxBottom = Math.max(maxBottom, rect.bottom);
+            }
+
+            canvas.style.width = `${Math.max(maxRight + 100, window.innerWidth)}px`;
+            canvas.style.height = `${Math.max(maxBottom + 100, window.innerHeight)}px`;
+        }
+
+        // Expand canvas on scroll if needed
+        window.addEventListener('scroll', () => {
+            if (window.innerHeight + window.pageYOffset >= canvas.offsetHeight - 100) {
+                canvas.style.height = `${canvas.offsetHeight + 500}px`;
+            }
+            if (window.innerWidth + window.pageXOffset >= canvas.offsetWidth - 100) {
+                canvas.style.width = `${canvas.offsetWidth + 500}px`;
             }
         });
 
-        canvas.addEventListener('mousemove', (e) => {
-            if (!isDragging) return;
-            e.preventDefault();
-            const x = e.pageX - canvas.offsetLeft;
-            const y = e.pageY - canvas.offsetTop;
-            const walkX = (x - startX) * 2;
-            const walkY = (y - startY) * 2;
-            window.scrollTo(scrollLeft - walkX, scrollTop - walkY);
-        });
-
-        canvas.addEventListener('mouseup', () => {
-            isDragging = false;
-        });
-
-        canvas.addEventListener('mouseleave', () => {
-            isDragging = false;
-        });
+        // Initial canvas expansion to start
+        expandCanvas();
     </script>
 </body>
 </html>
