@@ -29,38 +29,53 @@
             padding: 20px;
             box-sizing: border-box;
         }
+        
         /* Text box container styles */
         .text-box {
             position: absolute;
             background: rgba(255, 255, 255, 0.8);
             border: 1px solid #ccc;
-            padding: 5px;
-            min-width: 100px;
-            min-height: 30px;
-            cursor: move; /* Indicate draggable */
+
+            height: fit-content !important;
+            
+            /*padding: 5px;*/
+            /*min-width: 100px;*/
+            /*min-height: 30px;*/
+            /*resize: horizontal; !* Allow horizontal resizing *!*/
+            /*overflow: hidden; !* Hide overflow for auto height *!*/
         }
-        /* Text input area styles */
-        .text-input {
-            width: 100%;
-            height: 100%;
-            border: none;
+        /* Header for dragging */
+        .text-box-header {
+            cursor: move;
+            background: #eee;
+            padding: 2px;
+            border-bottom: 1px solid #ccc;
+        }
+        /* Text content styles */
+        .text-box-content {
             outline: none;
-            font-family: Arial, sans-serif;
-            font-size: 16px;
-            background: transparent;
-            resize: none;
+            
+            width: 200px;
+            min-height: 50px;
+            min-width: 100px;
+            /*border: 1px solid #ccc;*/
+            padding: 10px;
             overflow: auto;
-            cursor: text;
+            resize: horizontal;
+            max-width: 100%;
+            white-space: pre-wrap; /* Allow wrapping of text */
+            overflow-wrap: break-word; /* Enable breaking of long words */
         }
-        /* Resize handle styles */
-        .resize-handle {
-            position: absolute;
-            width: 10px;
-            height: 10px;
-            background: #666;
-            right: 0;
-            bottom: 0;
-            cursor: nwse-resize; /* Indicate resizable */
+        .resizable {
+            width: 200px;
+            min-height: 50px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            overflow: auto;
+            resize: horizontal;
+            max-width: 100%;
+            white-space: pre-wrap; /* Allow wrapping of text */
+            overflow-wrap: break-word; /* Enable breaking of long words */
         }
         /* Image container styles */
         .image-container {
@@ -84,7 +99,6 @@
 <script>
   const canvas = document.getElementById('infinite-canvas');
   const canvasContainer = document.getElementById('canvas-container');
-  let isResizing = false;
   let isMouseDown = false;
   let clickX, clickY;
 
@@ -112,31 +126,35 @@
   function createTextBox(x, y) {
     const box = document.createElement('div');
     box.className = 'text-box';
+    // box.className = 'resizable';
     box.style.left = `${x}px`;
     box.style.top = `${y}px`;
 
-    const input = document.createElement('textarea');
-    input.className = 'text-input';
-    box.appendChild(input);
+    const header = document.createElement('div');
+    header.className = 'text-box-header';
+    box.appendChild(header);
 
-    const resizeHandle = document.createElement('div');
-    resizeHandle.className = 'resize-handle';
-    box.appendChild(resizeHandle);
+    const content = document.createElement('div');
+    content.className = 'text-box-content';
+    // content.className = 'resizable';
+    content.contentEditable = true;
+    box.appendChild(content);
 
     canvas.appendChild(box);
-    input.focus();
+    content.focus();
 
-    makeBoxDraggable(box);
-    makeBoxResizable(box, resizeHandle);
+    makeBoxDraggable(box, header);
     updateCanvasSize();
+
+    // Adjust box height automatically when content changes
+    content.addEventListener('input', () => adjustHeight(box, content));
   }
 
-  // Make text boxes draggable
-  function makeBoxDraggable(box) {
+  // Make text boxes draggable through the header
+  function makeBoxDraggable(box, handle) {
     let offsetX, offsetY;
 
-    box.addEventListener('mousedown', (e) => {
-      if (e.target.className.includes('resize-handle') || e.target.className.includes('text-input')) return;
+    handle.addEventListener('mousedown', (e) => {
       offsetX = e.clientX - box.offsetLeft;
       offsetY = e.clientY - box.offsetTop;
       document.onmousemove = (e) => {
@@ -148,25 +166,11 @@
     });
   }
 
-  // Make text boxes resizable
-  function makeBoxResizable(box, handle) {
-    handle.addEventListener('mousedown', (e) => {
-      isResizing = true;
-      const initX = e.clientX;
-      const initY = e.clientY;
-      const initWidth = box.offsetWidth;
-      const initHeight = box.offsetHeight;
-
-      document.onmousemove = (e) => {
-        box.style.width = `${initWidth + e.clientX - initX}px`;
-        box.style.height = `${initHeight + e.clientY - initY}px`;
-        updateCanvasSize();
-      };
-      document.onmouseup = () => {
-        isResizing = false;
-        document.onmousemove = document.onmouseup = null;
-      };
-    });
+  // Adjust the height of the box automatically with the content
+  function adjustHeight(box, content) {
+    content.style.height = 'auto';
+    box.style.height = `${content.scrollHeight + 15}px`; // Adjust height based on content
+    updateCanvasSize();
   }
 
   // Handle image pasting
