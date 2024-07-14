@@ -38,13 +38,22 @@
             padding: 2px;
             border-bottom: 1px solid transparent;
         }
+        .horizontal-resize-handle {
+            width: 2px;
+            cursor: ew-resize;
+            /*background-color: #ccc;*/
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+        }
         .text-box-content {
             outline: none;
             width: 200px;
             min-height: 50px;
             min-width: 100px;
             padding: 10px;
-            overflow: auto;
+            /*overflow: auto;*/
             resize: horizontal;
             max-width: 100%;
             white-space: pre-wrap;
@@ -113,6 +122,10 @@
     dragHandle.className = 'text-box-drag-handle';
     box.appendChild(dragHandle);
 
+    const resizeHandle = document.createElement('div');
+    resizeHandle.className = 'horizontal-resize-handle';
+    box.appendChild(resizeHandle);
+
     const content = document.createElement('div');
     content.className = 'text-box-content';
     content.contentEditable = true;
@@ -122,6 +135,7 @@
     content.focus();
 
     makeBoxDraggable(box, dragHandle);
+    makeBoxResizable(box, content, resizeHandle);
     updateCanvasSize();
 
     content.addEventListener('input', () => adjustHeight(box, content));
@@ -137,6 +151,17 @@
       document.onmousemove = (e) => {
         box.style.left = `${e.clientX - offsetX}px`;
         box.style.top = `${e.clientY - offsetY}px`;
+        updateCanvasSize();
+      };
+      document.onmouseup = () => document.onmousemove = document.onmouseup = null;
+    });
+  }
+
+  function makeBoxResizable(box, textBox, handle) {
+    handle.addEventListener('mousedown', (e) => {
+      document.onmousemove = (e) => {
+        const newWidth = e.clientX - box.offsetLeft + canvasContainer.scrollLeft - 20/*padding*/;
+        textBox.style.width = `${newWidth}px`;
         updateCanvasSize();
       };
       document.onmouseup = () => document.onmousemove = document.onmouseup = null;
