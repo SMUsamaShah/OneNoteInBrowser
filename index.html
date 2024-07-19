@@ -5,67 +5,100 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OneNote-like Interface</title>
     <style>
+        /* Reset default margins and set full height */
         body, html {
             margin: 0;
             padding: 0;
             height: 100%;
             overflow: hidden;
         }
+
+        /* Container for the infinite canvas */
         #canvas-container {
             position: relative;
             width: 100%;
             height: 100%;
             overflow: auto;
-            /*background: #f0f0f0;*/
         }
+
+        /* The infinite canvas itself */
         #infinite-canvas {
             position: relative;
             min-width: 100%;
             min-height: 100%;
-            /*background: #f0f0f0;*/
             padding: 20px;
             box-sizing: border-box;
         }
+
+        /* Styles for text boxes */
         .text-box {
             position: absolute;
-            /*background: rgba(255, 255, 255, 0.8);*/
-            border: 1px solid transparent;  
+            border: 1px solid transparent;
             height: fit-content !important;
         }
+
+        /* Drag handle for text boxes */
         .text-box-drag-handle {
             cursor: move;
             background: transparent;
             padding: 2px;
             border-bottom: 1px solid transparent;
         }
+
+        /* Resize handle for text boxes */
         .horizontal-resize-handle {
             width: 2px;
             cursor: ew-resize;
-            /*background-color: #ccc;*/
             position: absolute;
             right: 0;
             top: 0;
             bottom: 0;
+            background: transparent;
         }
+
+        /* Content area of text boxes */
         .text-box-content {
             outline: none;
             width: 200px;
             min-height: 50px;
             min-width: 100px;
             padding: 10px;
-            /*overflow: auto;*/
             resize: horizontal;
             max-width: 100%;
             white-space: pre-wrap;
             overflow-wrap: break-word;
+            caret-color: black; /* Ensure the cursor is always visible */
         }
-        .text-box:hover, .text-box:focus-within {
+
+        /* Show borders when hovered, but only if not empty */
+        .text-box:hover:not(:has(.text-box-content:empty)) {
             border-color: #ccc;
         }
-        .text-box:hover .text-box-drag-handle, .text-box:focus-within .text-box-drag-handle {
+
+        .text-box:hover:not(:has(.text-box-content:empty)) .text-box-drag-handle {
             background: #eee;
             border-bottom-color: #ccc;
         }
+
+        .text-box:hover:not(:has(.text-box-content:empty)) .horizontal-resize-handle {
+            background: #ccc;
+        }
+
+        /* Show borders when focused and not empty */
+        .text-box:focus-within:not(:has(.text-box-content:empty)) {
+            border-color: #ccc;
+        }
+
+        .text-box:focus-within:not(:has(.text-box-content:empty)) .text-box-drag-handle {
+            background: #eee;
+            border-bottom-color: #ccc;
+        }
+
+        .text-box:focus-within:not(:has(.text-box-content:empty)) .horizontal-resize-handle {
+            background: #ccc;
+        }
+
+        /* Styles for image containers */
         .image-container {
             position: absolute;
             cursor: move;
@@ -73,10 +106,12 @@
             max-height: 300px;
             border: 1px solid transparent;
         }
+
         .image-container img {
             width: 100%;
             height: 100%;
         }
+
         .image-container:hover, .image-container:focus-within {
             border-color: #ccc;
         }
@@ -88,11 +123,15 @@
 </div>
 
 <script>
+  // Get references to the canvas and its container
   const canvas = document.getElementById('infinite-canvas');
   const canvasContainer = document.getElementById('canvas-container');
+
+  // Variables to track mouse state
   let isMouseDown = false;
   let clickX, clickY;
 
+  // Event listener for mouse down on the canvas
   canvas.addEventListener('mousedown', (e) => {
     if (e.target === canvas) {
       isMouseDown = true;
@@ -101,6 +140,7 @@
     }
   });
 
+  // Event listener for mouse up on the canvas
   canvas.addEventListener('mouseup', (e) => {
     if (isMouseDown && e.target === canvas) {
       const distance = Math.sqrt((e.pageX - clickX) ** 2 + (e.pageY - clickY) ** 2);
@@ -112,6 +152,7 @@
     isMouseDown = false;
   });
 
+  // Function to create a new text box
   function createTextBox(x, y) {
     const box = document.createElement('div');
     box.className = 'text-box';
@@ -142,6 +183,7 @@
     content.addEventListener('blur', () => removeIfEmpty(box, content));
   }
 
+  // Function to make a box draggable
   function makeBoxDraggable(box, handle) {
     let offsetX, offsetY;
 
@@ -157,10 +199,11 @@
     });
   }
 
+  // Function to make a box resizable
   function makeBoxResizable(box, textBox, handle) {
     handle.addEventListener('mousedown', (e) => {
       document.onmousemove = (e) => {
-        const newWidth = e.clientX - box.offsetLeft + canvasContainer.scrollLeft - 20/*padding*/;
+        const newWidth = e.clientX - box.offsetLeft + canvasContainer.scrollLeft - 20; // 20 for padding
         textBox.style.width = `${newWidth}px`;
         updateCanvasSize();
       };
@@ -168,20 +211,23 @@
     });
   }
 
+  // Function to adjust the height of a text box
   function adjustHeight(box, content) {
     content.style.height = 'auto';
     box.style.height = `${content.scrollHeight + 15}px`;
     updateCanvasSize();
   }
 
+  // Function to remove empty text boxes
   function removeIfEmpty(box, content) {
-    const text = content.innerText.trim();
+    const text = content.textContent.trim();
     if (!text) {
       box.remove();
       updateCanvasSize();
     }
   }
 
+  // Event listener for pasting images
   document.addEventListener('paste', (e) => {
     const items = e.clipboardData.items;
     for (let item of items) {
@@ -194,6 +240,7 @@
     }
   });
 
+  // Function to create an image container
   function createImage(src) {
     const container = document.createElement('div');
     container.className = 'image-container';
@@ -211,6 +258,7 @@
     updateCanvasSize();
   }
 
+  // Function to make an image draggable
   function makeImageDraggable(container) {
     let offsetX, offsetY;
 
@@ -226,6 +274,7 @@
     });
   }
 
+  // Function to update the canvas size
   function updateCanvasSize() {
     const elements = canvas.children;
     let maxRight = 0;
@@ -241,7 +290,10 @@
     canvas.style.height = `${Math.max(maxBottom + 1000, canvasContainer.offsetHeight)}px`;
   }
 
+  // Event listener for mouse wheel to update canvas size
   document.addEventListener('wheel', (e) => updateCanvasSize());
+
+  // Initial canvas size update
   updateCanvasSize();
 </script>
 </body>
