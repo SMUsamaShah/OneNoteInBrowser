@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OneNote Clone with Tabs</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        .tab-container {
+            display: flex;
+            background-color: #f0f0f0;
+            padding: 5px 5px 0;
+            overflow-x: auto;
+        }
+        .tab {
+            padding: 5px 15px;
+            margin-right: -10px;
+            cursor: pointer;
+            white-space: nowrap;
+            position: relative;
+            z-index: 1;
+            height: 30px;
+            line-height: 30px;
+        }
+        .tab::before, .tab::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            z-index: -1;
+        }
+        .tab::before {
+            transform: perspective(5px) rotateX(2deg);
+            transform-origin: bottom;
+            border-radius: 5px 5px 0 0;
+        }
+        .tab::after {
+            background: linear-gradient(to bottom, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0) 100%);
+            border-radius: 5px 5px 0 0;
+        }
+        .tab:hover {
+            z-index: 2;
+        }
+        .tab:hover::before {
+            filter: brightness(95%);
+        }
+        .tab.active {
+            z-index: 3;
+        }
+        .tab.active::before {
+            background-color: #fff;
+        }
+        #quickNotes::before { background-color: #f8d7b0; }
+        #projects::before { background-color: #fae7b0; }
+        #personal::before { background-color: #b0d7fa; }
+        #ideas::before { background-color: #fab0e7; }
+        .add-tab {
+            padding: 5px 10px;
+            background-color: #e0e0e0;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-left: 10px;
+            align-self: center;
+            z-index: 5;
+        }
+        #page-container {
+            position: relative;
+            width: 100%;
+            height: calc(100% - 40px);
+            overflow: auto;
+        }
+        .infinite-page {
+            position: relative;
+            min-width: 100%;
+            min-height: 100%;
+            padding: 20px;
+            box-sizing: border-box;
+            display: none;
+        }
+        .infinite-page.active {
+            display: block;
+        }
+        .text-box {
+            position: absolute;
+            border: 1px solid transparent;
+            height: fit-content !important;
+        }
+        .text-box-drag-handle {
+            cursor: move;
+            background: transparent;
+            padding: 2px;
+            border-bottom: 1px solid transparent;
+        }
+        .horizontal-resize-handle {
+            width: 2px;
+            cursor: ew-resize;
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            background: transparent;
+        }
+        .text-box-content {
+            outline: none;
+            width: 200px;
+            min-height: 50px;
+            min-width: 100px;
+            padding: 10px;
+            resize: horizontal;
+            max-width: 100%;
+            white-space: pre-wrap;
+            overflow-wrap: break-word;
+            caret-color: black;
+        }
+        .text-box:hover:not(:has(.text-box-content:empty)),
+        .text-box:focus-within:not(:has(.text-box-content:empty)) {
+            border-color: #ccc;
+        }
+        .text-box:hover:not(:has(.text-box-content:empty)) .text-box-drag-handle,
+        .text-box:focus-within:not(:has(.text-box-content:empty)) .text-box-drag-handle {
+            background: #eee;
+            border-bottom-color: #ccc;
+        }
+        .text-box:hover:not(:has(.text-box-content:empty)) .horizontal-resize-handle,
+        .text-box:focus-within:not(:has(.text-box-content:empty)) .horizontal-resize-handle {
+            background: #ccc;
+        }
+        .image-container {
+            position: absolute;
+            cursor: move;
+            max-width: 300px;
+            max-height: 300px;
+            border: 1px solid transparent;
+        }
+        .image-container img {
+            width: 100%;
+            height: 100%;
+        }
+        .image-container:hover, .image-container:focus-within {
+            border-color: #ccc;
+        }
+    </style>
+</head>
+<body>
+<div class="tab-container">
+    <div id="quickNotes" class="tab active">Quick Notes</div>
+    <div id="projects" class="tab">Projects</div>
+    <div id="personal" class="tab">Personal</div>
+    <div id="ideas" class="tab">Ideas</div>
+    <div class="add-tab">+</div>
+</div>
+<div id="page-container">
+    <div id="quickNotes-page" class="infinite-page active"></div>
+    <div id="projects-page" class="infinite-page"></div>
+    <div id="personal-page" class="infinite-page"></div>
+    <div id="ideas-page" class="infinite-page"></div>
+</div>
+
+<script>
+  const tabs = document.querySelectorAll('.tab');
+  const pages = document.querySelectorAll('.infinite-page');
+  const pageContainer = document.getElementById('page-container');
+
+  let activePage = document.querySelector('.infinite-page.active');
+  let isMouseDown = false;
+  let clickX, clickY;
+
+  // Tab switching functionality
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      pages.forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      const pageId = `${tab.id}-page`;
+      activePage = document.getElementById(pageId);
+      activePage.classList.add('active');
+      updatePageSize();
+    });
+  });
+
+  // Page interaction
+  pageContainer.addEventListener('mousedown', (e) => {
+    if (e.target === activePage) {
+      isMouseDown = true;
+      clickX = e.pageX;
+      clickY = e.pageY;
+    }
+  });
+
+  pageContainer.addEventListener('mouseup', (e) => {
+    if (isMouseDown && e.target === activePage) {
+      const distance = Math.sqrt((e.pageX - clickX) ** 2 + (e.pageY - clickY) ** 2);
+      const isEmptyDragOnPage = distance > 5;
+      if (!isEmptyDragOnPage) {
+        const rect = activePage.getBoundingClientRect();
+        const x = e.clientX - rect.left + pageContainer.scrollLeft;
+        const y = e.clientY - rect.top + pageContainer.scrollTop;
+        createTextBox(x, y);
+      }
+    }
+    isMouseDown = false;
+  });
+
+  function createTextBox(x, y) {
+    const box = document.createElement('div');
+    box.className = 'text-box';
+    box.style.left = `${x}px`;
+    box.style.top = `${y}px`;
+
+    const dragHandle = document.createElement('div');
+    dragHandle.className = 'text-box-drag-handle';
+    box.appendChild(dragHandle);
+
+    const resizeHandle = document.createElement('div');
+    resizeHandle.className = 'horizontal-resize-handle';
+    box.appendChild(resizeHandle);
+
+    const content = document.createElement('div');
+    content.className = 'text-box-content';
+    content.contentEditable = true;
+    box.appendChild(content);
+
+    activePage.appendChild(box);
+    content.focus();
+
+    makeBoxDraggable(box, dragHandle);
+    makeBoxResizable(box, content, resizeHandle);
+    updatePageSize();
+
+    content.addEventListener('input', () => adjustHeight(box, content));
+    content.addEventListener('blur', () => removeIfEmpty(box, content));
+  }
+
+  function makeBoxDraggable(box, handle) {
+    let offsetX, offsetY;
+
+    handle.addEventListener('mousedown', (e) => {
+      offsetX = e.clientX - box.offsetLeft;
+      offsetY = e.clientY - box.offsetTop;
+      document.onmousemove = (e) => {
+        box.style.left = `${e.clientX - offsetX}px`;
+        box.style.top = `${e.clientY - offsetY}px`;
+        updatePageSize();
+      };
+      document.onmouseup = () => document.onmousemove = document.onmouseup = null;
+    });
+  }
+
+  function makeBoxResizable(box, textBox, handle) {
+    handle.addEventListener('mousedown', (e) => {
+      document.onmousemove = (e) => {
+        const newWidth = e.clientX - box.offsetLeft + pageContainer.scrollLeft - 20;
+        textBox.style.width = `${newWidth}px`;
+        updatePageSize();
+      };
+      document.onmouseup = () => document.onmousemove = document.onmouseup = null;
+    });
+  }
+
+  function adjustHeight(box, content) {
+    content.style.height = 'auto';
+    box.style.height = `${content.scrollHeight + 15}px`;
+    updatePageSize();
+  }
+
+  function removeIfEmpty(box, content) {
+    const text = content.textContent.trim();
+    if (!text) {
+      box.remove();
+      updatePageSize();
+    }
+  }
+
+  document.addEventListener('paste', (e) => {
+    const items = e.clipboardData.items;
+    for (let item of items) {
+      if (item.type.indexOf('image') !== -1) {
+        const blob = item.getAsFile();
+        const reader = new FileReader();
+        reader.onload = (e) => createImage(e.target.result);
+        reader.readAsDataURL(blob);
+      }
+    }
+  });
+
+  function createImage(src) {
+    const container = document.createElement('div');
+    container.className = 'image-container';
+    const img = document.createElement('img');
+    img.src = src;
+    container.appendChild(img);
+
+    activePage.appendChild(container);
+
+    const rect = activePage.getBoundingClientRect();
+    container.style.left = `${window.pageXOffset + rect.width / 2}px`;
+    container.style.top = `${window.pageYOffset + rect.height / 2}px`;
+
+    makeImageDraggable(container);
+    updatePageSize();
+  }
+
+  function makeImageDraggable(container) {
+    let offsetX, offsetY;
+
+    container.addEventListener('mousedown', (e) => {
+      offsetX = e.clientX - container.offsetLeft;
+      offsetY = e.clientY - container.offsetTop;
+      document.onmousemove = (e) => {
+        container.style.left = `${e.clientX - offsetX}px`;
+        container.style.top = `${e.clientY - offsetY}px`;
+        updatePageSize();
+      };
+      document.onmouseup = () => document.onmousemove = document.onmouseup = null;
+    });
+  }
+
+  function updatePageSize() {
+    const elements = activePage.children;
+    let maxRight = 0;
+    let maxBottom = 0;
+
+    for (let element of elements) {
+      const rect = element.getBoundingClientRect();
+      maxRight = Math.max(maxRight, rect.right + pageContainer.offsetWidth);
+      maxBottom = Math.max(maxBottom, rect.bottom + pageContainer.offsetHeight);
+    }
+
+    activePage.style.width = `${Math.max(maxRight + 1000, pageContainer.offsetWidth)}px`;
+    activePage.style.height = `${Math.max(maxBottom + 1000, pageContainer.offsetHeight)}px`;
+  }
+
+  document.addEventListener('wheel', (e) => updatePageSize());
+
+  updatePageSize();
+</script>
+</body>
+</html>
